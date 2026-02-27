@@ -38,9 +38,9 @@ def get_keyboard():
     return keyboard.get_keyboard()
 
 # Отправка сообщений
-def send_message(user_id, message):
+def send_message(peer_id, message):
     vk.messages.send(
-        user_id=user_id,
+        peer_id=peer_id,
         message=message,
         random_id=random.randint(1, 10**6),
         keyboard=get_keyboard()
@@ -66,32 +66,36 @@ print("Бот для администрации запущен...")
 
 # Основной цикл обработки сообщений
 for event in longpoll.listen():
-    if event.type == VkEventType.MESSAGE_NEW and event.to_me:
-        user_id = event.user_id
+    if event.type == VkEventType.MESSAGE_NEW:
+        peer_id = event.peer_id
         text = event.text.strip()
 
         # Команда /start
         if text.lower() == "/start":
-            send_message(user_id, "Бот Логирования готов к работе")
+            send_message(peer_id, "Бот Логирования готов к работе")
 
         # Вход в список админов
         elif text == "Вошел":
-            if user_id not in admins:
-                admins.append(user_id)
-                save_admins()
-                send_message(user_id, "✅ Вы добавлены в список администраторов в сети.")
-            else:
-                send_message(user_id, "⚠️ Вы уже в списке администраторов в сети.")
+            if event.from_user:  # проверяем, что это пользователь
+                user_id = event.user_id
+                if user_id not in admins:
+                    admins.append(user_id)
+                    save_admins()
+                    send_message(peer_id, "✅ Вы добавлены в список администраторов в сети.")
+                else:
+                    send_message(peer_id, "⚠️ Вы уже в списке администраторов в сети.")
 
         # Выход из списка админов
         elif text == "Вышел":
-            if user_id in admins:
-                admins.remove(user_id)
-                save_admins()
-                send_message(user_id, "❌ Вы удалены из списка администраторов из сети.")
-            else:
-                send_message(user_id, "⚠️ Вас нет в списке администраторов.")
+            if event.from_user:
+                user_id = event.user_id
+                if user_id in admins:
+                    admins.remove(user_id)
+                    save_admins()
+                    send_message(peer_id, "❌ Вы удалены из списка администраторов из сети.")
+                else:
+                    send_message(peer_id, "⚠️ Вас нет в списке администраторов.")
 
         # Список онлайн админов
         elif text == "Админы в сети":
-            send_message(user_id, get_admins_online_list())
+            send_message(peer_id, get_admins_online_list())
