@@ -1,12 +1,16 @@
+# ==== НАЧАЛО: Загрузка токена из .env ====
+from dotenv import load_dotenv
+import os
+
+load_dotenv()  # загружает переменные из .env
+TOKEN = os.environ['VK_TOKEN']  # токен VK
+
+# ==== Импорты и настройки бота ====
 import vk_api
 from vk_api.longpoll import VkLongPoll, VkEventType
 from vk_api.keyboard import VkKeyboard, VkKeyboardColor
 import json
-import os
 import random
-
-# Получаем токен из переменной окружения
-TOKEN = os.environ['VK_TOKEN']
 
 vk_session = vk_api.VkApi(token=TOKEN)
 vk = vk_session.get_api()
@@ -25,6 +29,7 @@ def save_admins():
     with open(admins_file, "w") as f:
         json.dump(admins, f)
 
+# Создание клавиатуры
 def get_keyboard():
     keyboard = VkKeyboard(one_time=False)
     keyboard.add_button("Вошел", VkKeyboardColor.POSITIVE)
@@ -34,6 +39,7 @@ def get_keyboard():
     keyboard.add_button("Отсутствующие", VkKeyboardColor.PRIMARY)
     return keyboard.get_keyboard()
 
+# Отправка сообщений
 def send_message(user_id, message):
     vk.messages.send(
         user_id=user_id,
@@ -42,32 +48,36 @@ def send_message(user_id, message):
         keyboard=get_keyboard()
     )
 
+# Список админов онлайн/оффлайн
 def get_admins_online_list():
     if not admins:
         return "Список администраторов пуст."
     try:
         admin_info = vk.users.get(user_ids=",".join(map(str, admins)), fields="online")
-        online_admins = [f"{a['first_name']} {a['last_name']} (https://vk.com/id{a['id']})" for a in admin_info if a["online"] == 1]
-        offline_admins = [f"{a['first_name']} {a['last_name']} (https://vk.com/id{a['id']})" for a in admin_info if a["online"] == 0]
-
+        online_admins = [f"{a['first_name']} {a['last_name']} (https://vk.com/id{a['id']})" 
+                         for a in admin_info if a["online"] == 1]
+        offline_admins = [f"{a['first_name']} {a['last_name']} (https://vk.com/id{a['id']})" 
+                          for a in admin_info if a["online"] == 0]
         response = ""
         if online_admins:
             response += f"🟢 Админов в сети ({len(online_admins)}):\n" + "\n".join(online_admins)
         else:
             response += "🟢 Админов в сети: 0\nНет админов в сети"
-        
-        response += f"\n\n🔴 Админов оффлайн ({len(offline_admins)}):\n" + ("\n".join(offline_admins) if offline_admins else "Нет отсутствующих админов")
+        response += f"\n\n🔴 Админов оффлайн ({len(offline_admins)}):\n" + \
+                    ("\n".join(offline_admins) if offline_admins else "Нет отсутствующих админов")
         return response
     except Exception as e:
         return f"Ошибка при получении данных: {e}"
 
 print("Бот для администрации запущен...")
 
+# Основной цикл обработки сообщений
 for event in longpoll.listen():
     if event.type == VkEventType.MESSAGE_NEW and event.to_me:
         user_id = event.user_id
         text = event.text
 
+        # Вход в список админов
         if text == "Вошел":
             if user_id not in admins:
                 admins.append(user_id)
@@ -75,6 +85,8 @@ for event in longpoll.listen():
                 send_message(user_id, "✅ Вы добавлены в список администраторов в сети.")
             else:
                 send_message(user_id, "⚠️ Вы уже в списке администраторов в сети.")
+
+        # Выход из списка админов
         elif text == "Вышел":
             if user_id in admins:
                 admins.remove(user_id)
@@ -82,8 +94,12 @@ for event in longpoll.listen():
                 send_message(user_id, "❌ Вы удалены из списка администраторов из сети.")
             else:
                 send_message(user_id, "⚠️ Вас нет в списке администраторов.")
+
+        # Список админов онлайн/оффлайн
         elif text == "Админы в сети":
             send_message(user_id, get_admins_online_list())
+
+        # Список отсутствующих админов
         elif text == "Отсутствующие":
             if not admins:
                 send_message(user_id, "Список администраторов пуст.")
