@@ -1,5 +1,5 @@
 
-          # ==== НАЧАЛО: Загрузка токена из .env ====
+# ==== НАЧАЛО: Загрузка токена из .env ====
 from dotenv import load_dotenv
 import os
 import json
@@ -31,13 +31,13 @@ def save_admins():
     with open(admins_file, "w") as f:
         json.dump(admins, f, indent=2)
 
-# ==== Клавиатура ====
+# ==== Клавиатура (только текст, без упоминания бота) ====
 def get_keyboard():
     keyboard = VkKeyboard(one_time=False)
-    keyboard.add_button("Вошел", VkKeyboardColor.POSITIVE)
-    keyboard.add_button("Вышел", VkKeyboardColor.NEGATIVE)
+    keyboard.add_button("Вошел", color=VkKeyboardColor.POSITIVE)
+    keyboard.add_button("Вышел", color=VkKeyboardColor.NEGATIVE)
     keyboard.add_line()
-    keyboard.add_button("Админы в сети", VkKeyboardColor.PRIMARY)
+    keyboard.add_button("Админы в сети", color=VkKeyboardColor.PRIMARY)
     return keyboard.get_keyboard()
 
 keyboard_json = get_keyboard()
@@ -78,11 +78,11 @@ for event in longpoll.listen():
             peer_id = event.peer_id       # Куда отправлять
             text = event.text.strip()
 
-            # Команда /start (работает для всех)
+            # Команда /start
             if text.lower() == "/start":
                 send_message(peer_id, "Бот Логирования готов к работе")
 
-            # Команды "Вошел" / "Вышел" работают только для админов
+            # Вход в список админов
             elif text == "Вошел":
                 if user_id not in admins:
                     admins.append(user_id)
@@ -91,6 +91,7 @@ for event in longpoll.listen():
                 else:
                     send_message(peer_id, "⚠️ Вы уже в списке администраторов в сети.")
 
+            # Выход из списка админов
             elif text == "Вышел":
                 if user_id in admins:
                     admins.remove(user_id)
