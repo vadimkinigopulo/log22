@@ -28,7 +28,7 @@ def save_admins():
     with open(admins_file, "w") as f:
         json.dump(admins, f)
 
-# Клавиатура с payload
+# Клавиатура (payload можно оставить, но в чатах работает только текст)
 def get_keyboard():
     keyboard = VkKeyboard(one_time=False)
     keyboard.add_button("Вошел", color=VkKeyboardColor.POSITIVE, payload='{"action":"entered"}')
@@ -81,7 +81,7 @@ for event in longpoll.listen():
             if len(parts) > 1:
                 text = parts[1]  # оставляем команду после упоминания
 
-        # Обработка текстовых команд
+        # Обработка команд
         if text == "/start":
             send_message(peer_id, "Бот Логирования готов к работе")
 
@@ -104,12 +104,13 @@ for event in longpoll.listen():
         elif text == "админы в сети":
             send_message(peer_id, get_admins_online_list())
 
-    # Нажатие на кнопку
+    # Нажатие на кнопку (payload в чатах обычно не приходит)
     elif event.type == VkBotEventType.MESSAGE_EVENT:
         user_id = event.user_id
         peer_id = event.peer_id
         payload = json.loads(event.object.payload)
 
+        # Обработка payload для ЛС (если приходит)
         if payload.get("action") == "entered":
             if user_id not in admins:
                 admins.append(user_id)
