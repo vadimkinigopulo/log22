@@ -1,23 +1,23 @@
-# ==== НАЧАЛО: Загрузка токена из .env ====
 from dotenv import load_dotenv
 import os
-load_dotenv()  # загружает переменные из .env
-TOKEN = os.environ['VK_TOKEN']  # токен VK
-
-# ==== Импорты и настройки бота ====
 import vk_api
-from vk_api.longpoll import VkLongPoll, VkEventType
+from vk_api.bot_longpoll import VkBotLongPoll, VkBotEventType
 from vk_api.keyboard import VkKeyboard, VkKeyboardColor
 import json
 import random
 
+# ==== Загрузка токена и GROUP_ID из .env ====
+load_dotenv()
+TOKEN = os.getenv("VK_TOKEN")  # токен сообщества
+GROUP_ID = int(os.getenv("GROUP_ID"))  # числовой ID сообщества
+
 vk_session = vk_api.VkApi(token=TOKEN)
 vk = vk_session.get_api()
-longpoll = VkLongPoll(vk_session)
+longpoll = VkBotLongPoll(vk_session, GROUP_ID)
 
 admins_file = "admins.json"
 
-# Загружаем список администраторов
+# Загружаем список админов
 if os.path.exists(admins_file):
     with open(admins_file, "r") as f:
         admins = json.load(f)
@@ -28,7 +28,7 @@ def save_admins():
     with open(admins_file, "w") as f:
         json.dump(admins, f)
 
-# Создание клавиатуры
+# Клавиатура
 def get_keyboard():
     keyboard = VkKeyboard(one_time=False)
     keyboard.add_button("Вошел", VkKeyboardColor.POSITIVE)
@@ -38,15 +38,15 @@ def get_keyboard():
     return keyboard.get_keyboard()
 
 # Отправка сообщений
-def send_message(user_id, message):
+def send_message(peer_id, message):
     vk.messages.send(
-        user_id=user_id,
+        peer_id=peer_id,
         message=message,
         random_id=random.randint(1, 10**6),
         keyboard=get_keyboard()
     )
 
-# Список онлайн админов (только онлайн)
+# Список онлайн админов
 def get_admins_online_list():
     if not admins:
         return "Список администраторов пуст."
@@ -62,39 +62,34 @@ def get_admins_online_list():
     except Exception as e:
         return f"Ошибка при получении данных: {e}"
 
-print("Бот для администрации запущен...")
+print("Бот для админов запущен! Работает во всех чатах, куда добавлено сообщество.")
 
-# Основной цикл обработки сообщений
+# Главный цикл
 for event in longpoll.listen():
-    if event.type == VkEventType.MESSAGE_NEW and event.to_me:
-        user_id = event.user_id
-        text = event.text.strip()
+    if event.type == VkBotEventType.MESSAGE_NEW:
+        msg = event.message
+        peer_id = msg['peer_id']
+        user_id = msg['from_id']
+        text = msg['text'].strip()
 
-        # Команда /start
         if text.lower() == "/start":
-            send_message(user_id, "Бот Логирования готов к работе")
+            send_message(peer_id, "Бот Логирования готов к работе")
 
-        # Вход в список админов
         elif text == "Вошел":
             if user_id not in admins:
                 admins.append(user_id)
                 save_admins()
-                send_message(user_id, "✅ Вы добавлены в список администраторов в сети.")
+                send_message(peer_id, "✅ Вы добавлены в список администраторов в сети.")
             else:
-                send_message(user_id, "⚠️ Вы уже в списке администраторов в сети.")
+                send_message(peer_id, "⚠️ Вы уже в списке администраторов в сети.")
 
-        # Выход из списка админов
         elif text == "Вышел":
             if user_id in admins:
                 admins.remove(user_id)
                 save_admins()
-                send_message(user_id, "❌ Вы удалены из списка администраторов из сети.")
+                send_message(peer_id, "❌ Вы удалены из списка администраторов из сети.")
             else:
-                send_message(user_id, "⚠️ Вас нет в списке администраторов.")
+                send_message(peer_id, "⚠️ Вас нет в списке администраторов.")
 
-        # Список онлайн админов
         elif text == "Админы в сети":
-            send_message(user_id, get_admins_online_list())
-
-
-
+            send_message(peer_id, get_admins_online_list())
