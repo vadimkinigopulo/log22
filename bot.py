@@ -1,6 +1,5 @@
 import os
 import json
-import random
 import time
 from dotenv import load_dotenv
 import vk_api
@@ -73,12 +72,10 @@ def get_admins_online_list():
 
     now = time.time()
     result = []
-
     for i, (uid, info) in enumerate(admins.items(), start=1):
         first_name, last_name = info["first_name"], info["last_name"]
         online_time = now - info["start_time"]
         result.append(f"{i}. [id{uid}|{first_name} {last_name}] — ⏱ {format_time(online_time)}")
-
     return "💼 Администрация в сети:\n\n" + "\n".join(result)
 
 print("Бот запущен.")
@@ -112,7 +109,8 @@ for event in longpoll.listen():
                 save_admins()
 
                 send_message(peer_id,
-                    f"🟢 [id{user_id}|{first_name} {last_name}] успешно авторизовался.\nДобро пожаловать!"
+                    f"🟢 Администратор [id{user_id}|{first_name} {last_name}] успешно авторизовался.\n"
+                    f"💼 Админов онлайн: {len(admins)}"
                 )
             continue
 
@@ -126,7 +124,8 @@ for event in longpoll.listen():
                 save_admins()
 
                 send_message(peer_id,
-                    f"🔴 [id{user_id}|{first_name} {last_name}] вышел из системы.\nДо встречи!"
+                    f"🔴 Администратор [id{user_id}|{first_name} {last_name}] вышел из системы.\n"
+                    f"💼 Админов онлайн: {len(admins)}"
                 )
             continue
 
