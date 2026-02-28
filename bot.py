@@ -2,7 +2,6 @@ import os
 import json
 import random
 import time
-from datetime import datetime
 from dotenv import load_dotenv
 import vk_api
 from vk_api.bot_longpoll import VkBotLongPoll, VkBotEventType
@@ -19,7 +18,7 @@ longpoll = VkBotLongPoll(vk_session, GROUP_ID)
 
 admins_file = "admins.json"
 
-# Загружаем список
+# Загружаем администраторов
 if os.path.exists(admins_file):
     with open(admins_file, "r") as f:
         admins = json.load(f)
@@ -36,10 +35,10 @@ def get_keyboard():
     keyboard.add_button("Вошел", VkKeyboardColor.POSITIVE, payload='{"action":"entered"}')
     keyboard.add_button("Вышел", VkKeyboardColor.NEGATIVE, payload='{"action":"exited"}')
     keyboard.add_line()
-    keyboard.add_button("Админы в сети", VkKeyboardColor.PRIMARY, payload='{"action":"admins"}')
+    keyboard.add_button("Администрация в сети", VkKeyboardColor.PRIMARY, payload='{"action":"admins"}')
     return keyboard.get_keyboard()
 
-# Отправка
+# Отправка сообщений
 def send_message(peer_id, message):
     vk.messages.send(
         peer_id=peer_id,
@@ -54,33 +53,30 @@ def format_time(seconds):
     minutes = (seconds % 3600) // 60
     return f"{int(hours)}ч {int(minutes)}м"
 
-# Список онлайн админов
+# Получение имени и фамилии
+def get_user_info(user_id):
+    user = vk.users.get(user_ids=user_id)[0]
+    return user["first_name"], user["last_name"]
+
+# Список администрации онлайн
 def get_admins_online_list():
     if not admins:
-        return "Список администраторов пуст."
-
-    user_ids = list(admins.keys())
-    user_info = vk.users.get(user_ids=",".join(user_ids))
+        return "Администрация в сети:\n\nСейчас никто не авторизован."
 
     now = time.time()
     result = []
 
-    for user in user_info:
-        uid = str(user["id"])
-        start_time = admins.get(uid)
+    for uid, start_time in admins.items():
+        first_name, last_name = get_user_info(uid)
+        online_time = now - start_time
 
-        if start_time:
-            online_time = now - start_time
-            result.append(
-                f"{user['first_name']} {user['last_name']} — ⏳ {format_time(online_time)}"
-            )
+        result.append(
+            f"• [id{uid}|{first_name} {last_name}] — {format_time(online_time)}"
+        )
 
-    if result:
-        return f"🟢 Админов в сети ({len(result)}):\n" + "\n".join(result)
-    else:
-        return "🟢 Сейчас никто не в сети."
+    return "Администрация в сети:\n\n" + "\n".join(result)
 
-print("Бот запущен!")
+print("Бот запущен.")
 
 # ================= ГЛАВНЫЙ ЦИКЛ =================
 
@@ -91,41 +87,44 @@ for event in longpoll.listen():
         msg = event.message
         peer_id = msg["peer_id"]
         user_id = str(msg["from_id"])
-        text = msg["text"].strip().lower()
 
-        # ===== КНОПКИ =====
         if msg.get("payload"):
             payload = json.loads(msg["payload"])
 
+            # ===== ВХОД =====
             if payload.get("action") == "entered":
 
                 if user_id in admins:
-                    send_message(peer_id, "⚠️ Ты уже в сети.")
+                    send_message(peer_id, "Вы уже авторизованы.")
                 else:
                     admins[user_id] = time.time()
                     save_admins()
-                    send_message(peer_id, "✅ Ты вошел в онлайн.")
 
+                    first_name, last_name = get_user_info(user_id)
+
+                    send_message(
+                        peer_id,
+                        f"Администратор [id{user_id}|{first_name} {last_name}] успешно авторизовался."
+                    )
                 continue
 
+            # ===== ВЫХОД =====
             elif payload.get("action") == "exited":
 
                 if user_id not in admins:
-                    send_message(peer_id, "⚠️ Ты не находишься в сети.")
+                    send_message(peer_id, "Вы не авторизованы.")
                 else:
-                    start_time = admins[user_id]
-                    total_time = time.time() - start_time
+                    first_name, last_name = get_user_info(user_id)
                     del admins[user_id]
                     save_admins()
-                    send_message(peer_id, f"❌ Ты вышел. Был в сети: {format_time(total_time)}")
 
+                    send_message(
+                        peer_id,
+                        f"Администратор [id{user_id}|{first_name} {last_name}] вышел из системы."
+                    )
                 continue
 
+            # ===== СПИСОК =====
             elif payload.get("action") == "admins":
                 send_message(peer_id, get_admins_online_list())
                 continue
-
-        # ===== ТЕКСТ =====
-
-        if text == "/start":
-            send_message(peer_id, "Бот логирования готов к работе.")
