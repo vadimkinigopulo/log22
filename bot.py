@@ -6,6 +6,7 @@ from dotenv import load_dotenv
 import vk_api
 from vk_api.bot_longpoll import VkBotLongPoll, VkBotEventType
 from vk_api.keyboard import VkKeyboard, VkKeyboardColor
+from vk_api.utils import get_random_id
 
 # ==== Загрузка токена и GROUP_ID ====
 load_dotenv()
@@ -27,104 +28,109 @@ else:
 
 def save_admins():
     with open(admins_file, "w") as f:
-        json.dump(admins, f)
+        json.dump(admins, f, ensure_ascii=False)
 
-# Клавиатура
+# ==== Клавиатура с эмодзи ====
 def get_keyboard():
     keyboard = VkKeyboard(one_time=False)
-    keyboard.add_button("Вошел", VkKeyboardColor.POSITIVE, payload='{"action":"entered"}')
-    keyboard.add_button("Вышел", VkKeyboardColor.NEGATIVE, payload='{"action":"exited"}')
+    keyboard.add_button("✅ Вошел", VkKeyboardColor.POSITIVE, payload='{"action":"entered"}')
+    keyboard.add_button("❌ Вышел", VkKeyboardColor.NEGATIVE, payload='{"action":"exited"}')
     keyboard.add_line()
-    keyboard.add_button("Администрация в сети", VkKeyboardColor.PRIMARY, payload='{"action":"admins"}')
+    keyboard.add_button("💼 Администрация в сети", VkKeyboardColor.PRIMARY, payload='{"action":"admins"}')
     return keyboard.get_keyboard()
 
-# Отправка сообщений
+# ==== Отправка сообщений ====
 def send_message(peer_id, message):
     vk.messages.send(
         peer_id=peer_id,
         message=message,
-        random_id=random.randint(1, 10**6),
+        random_id=get_random_id(),
         keyboard=get_keyboard()
     )
 
-# Формат времени
+# ==== Красивое время онлайн ====
 def format_time(seconds):
     hours = seconds // 3600
     minutes = (seconds % 3600) // 60
-    return f"{int(hours)}ч {int(minutes)}м"
+    if hours and minutes:
+        return f"{int(hours)}ч {int(minutes)}м"
+    elif hours:
+        return f"{int(hours)}ч"
+    elif minutes:
+        return f"{int(minutes)}м"
+    else:
+        return "меньше минуты"
 
-# Получение имени и фамилии
+# ==== Получение имени и фамилии пользователя ====
 def get_user_info(user_id):
     user = vk.users.get(user_ids=user_id)[0]
     return user["first_name"], user["last_name"]
 
-# Список администрации онлайн
+# ==== Список админов онлайн с красотой ====
 def get_admins_online_list():
     if not admins:
-        return "Администрация в сети:\n\nСейчас никто не авторизован."
+        return "💼 Администрация в сети:\n\nСейчас никто не авторизован."
 
     now = time.time()
     result = []
 
-    for uid, start_time in admins.items():
-        first_name, last_name = get_user_info(uid)
-        online_time = now - start_time
+    for i, (uid, info) in enumerate(admins.items(), start=1):
+        first_name, last_name = info["first_name"], info["last_name"]
+        online_time = now - info["start_time"]
+        result.append(f"{i}. [id{uid}|{first_name} {last_name}] — ⏱ {format_time(online_time)}")
 
-        result.append(
-            f"• [id{uid}|{first_name} {last_name}] — {format_time(online_time)}"
-        )
-
-    return "Администрация в сети:\n\n" + "\n".join(result)
+    return "💼 Администрация в сети:\n\n" + "\n".join(result)
 
 print("Бот запущен.")
 
 # ================= ГЛАВНЫЙ ЦИКЛ =================
-
 for event in longpoll.listen():
-
     if event.type == VkBotEventType.MESSAGE_NEW:
-
         msg = event.message
         peer_id = msg["peer_id"]
         user_id = str(msg["from_id"])
 
+        payload = {}
         if msg.get("payload"):
-            payload = json.loads(msg["payload"])
-
-            # ===== ВХОД =====
-            if payload.get("action") == "entered":
-
-                if user_id in admins:
-                    send_message(peer_id, "Вы уже авторизованы.")
-                else:
-                    admins[user_id] = time.time()
-                    save_admins()
-
-                    first_name, last_name = get_user_info(user_id)
-
-                    send_message(
-                        peer_id,
-                        f"Администратор [id{user_id}|{first_name} {last_name}] успешно авторизовался."
-                    )
+            try:
+                payload = json.loads(msg["payload"])
+            except json.JSONDecodeError:
+                send_message(peer_id, "⚠️ Ошибка обработки кнопки.")
                 continue
 
-            # ===== ВЫХОД =====
-            elif payload.get("action") == "exited":
+        # ===== ВХОД =====
+        if payload.get("action") == "entered":
+            if user_id in admins:
+                send_message(peer_id, "⚠️ Вы уже авторизованы.")
+            else:
+                first_name, last_name = get_user_info(user_id)
+                admins[user_id] = {
+                    "start_time": time.time(),
+                    "first_name": first_name,
+                    "last_name": last_name
+                }
+                save_admins()
 
-                if user_id not in admins:
-                    send_message(peer_id, "Вы не авторизованы.")
-                else:
-                    first_name, last_name = get_user_info(user_id)
-                    del admins[user_id]
-                    save_admins()
+                send_message(peer_id,
+                    f"🟢 [id{user_id}|{first_name} {last_name}] успешно авторизовался.\nДобро пожаловать!"
+                )
+            continue
 
-                    send_message(
-                        peer_id,
-                        f"Администратор [id{user_id}|{first_name} {last_name}] вышел из системы."
-                    )
-                continue
+        # ===== ВЫХОД =====
+        elif payload.get("action") == "exited":
+            if user_id not in admins:
+                send_message(peer_id, "⚠️ Вы не авторизованы.")
+            else:
+                first_name, last_name = admins[user_id]["first_name"], admins[user_id]["last_name"]
+                del admins[user_id]
+                save_admins()
 
-            # ===== СПИСОК =====
-            elif payload.get("action") == "admins":
-                send_message(peer_id, get_admins_online_list())
-                continue
+                send_message(peer_id,
+                    f"🔴 [id{user_id}|{first_name} {last_name}] вышел из системы.\nДо встречи!"
+                )
+            continue
+
+        # ===== СПИСОК =====
+        elif payload.get("action") == "admins":
+            send_message(peer_id, get_admins_online_list())
+            continue
