@@ -68,13 +68,20 @@ print("Бот для админов запущен! Работает во все
 
 # Главный цикл
 for event in longpoll.listen():
-    # Новое сообщение
+    # Новое сообщение (текст команды)
     if event.type == VkBotEventType.MESSAGE_NEW:
         msg = event.message
         peer_id = msg['peer_id']
         user_id = msg['from_id']
         text = msg['text'].strip().lower()
 
+        # Если текст начинается с упоминания сообщества, убираем его
+        if text.startswith("@"):
+            parts = text.split(" ", 1)
+            if len(parts) > 1:
+                text = parts[1]  # оставляем команду после упоминания
+
+        # Обработка текстовых команд
         if text == "/start":
             send_message(peer_id, "Бот Логирования готов к работе")
 
